@@ -48,6 +48,8 @@ export class CodexHarness implements GameHarness {
     const startedAt = Date.now();
     let firstItemMs: number | null = null;
     let commandCount = 0;
+    let commandMs = 0;
+    const commandStartedAt = new Map<string, number>();
     let inputTokens: number | null = null;
     let outputTokens: number | null = null;
     const options = {
@@ -74,8 +76,14 @@ export class CodexHarness implements GameHarness {
         if (firstItemMs === null && event.type === "item.started") {
           firstItemMs = Date.now() - startedAt;
         }
+        if (event.type === "item.started" && event.item.type === "command_execution") {
+          commandStartedAt.set(event.item.id, Date.now());
+        }
         if (event.type === "item.completed" && event.item.type === "command_execution") {
           commandCount += 1;
+          const commandStart = commandStartedAt.get(event.item.id);
+          if (commandStart !== undefined) commandMs += Date.now() - commandStart;
+          commandStartedAt.delete(event.item.id);
         }
         if (event.type === "turn.completed") {
           inputTokens = event.usage.input_tokens;
@@ -85,12 +93,15 @@ export class CodexHarness implements GameHarness {
         if (mapped) yield mapped;
       }
     } finally {
+      const totalMs = Date.now() - startedAt;
       console.info("Codex harness timing", {
         model: options.model ?? "provider-default",
         reasoningEffort: options.modelReasoningEffort ?? "provider-default",
-        totalMs: Date.now() - startedAt,
+        totalMs,
         firstItemMs,
         commandCount,
+        commandMs,
+        modelAndQueueMs: totalMs - commandMs,
         inputTokens,
         outputTokens,
       });
