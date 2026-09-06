@@ -114,4 +114,22 @@ Before opening registration to the public:
 
 The last point is essential for hostile multi-tenancy. A logical workspace directory plus the Codex sandbox is useful defense in depth, but the worker’s container or VM boundary should be the authoritative tenant isolation boundary.
 
-The included app image installs Bubblewrap, following the official Codex Linux sandbox requirement. The Compose app service uses `seccomp=unconfined` so Bubblewrap can create its namespace inside Docker; it does not add `SYS_ADMIN` or use privileged mode. Review this setting with your infrastructure security policy, and replace the combined app/worker container with disposable job workers before a public launch.
+The included app image installs Bubblewrap, following the official Codex Linux sandbox requirement. The Compose app service uses `seccomp=unconfined` and `apparmor=unconfined` so Bubblewrap can create its nested namespace and mounts inside Docker; this is scoped to the app container, does not add `SYS_ADMIN`, and does not use privileged mode. Bubblewrap remains the inner workspace sandbox. Review these settings with your infrastructure security policy, and replace the combined app/worker container with disposable job workers before a public launch.
+
+## Codex sandbox smoke test
+
+After creating or recreating the app container, confirm that both outer Docker restrictions are disabled for this service:
+
+```bash
+docker inspect "$(docker compose ps -q app)" \
+  --format '{{json .HostConfig.SecurityOpt}}'
+```
+
+The result must include both `seccomp=unconfined` and `apparmor=unconfined`. Then verify that Bubblewrap can create its nested mount namespace:
+
+```bash
+docker compose exec -T app \
+  bwrap --ro-bind / / --unshare-user --uid 0 true
+```
+
+Success produces no output and exits with status zero. `Failed to make / slave: Permission denied` means the running container still has an AppArmor restriction; recreate it after confirming the Compose settings instead of merely restarting it.

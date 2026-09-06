@@ -107,7 +107,7 @@ For Azure with the standard OpenAI provider, keep the default empty `docker/code
 
 The thread ID is recorded only after Codex emits `thread.started`. Each subsequent message resumes that thread in the same workspace.
 
-On Linux, Codex uses Bubblewrap for `workspace-write`. The image installs the distribution package as required by the official sandbox documentation. Compose disables Docker's outer seccomp profile for the app container because that profile blocks Bubblewrap's namespace creation; the app is not privileged and receives no added Linux capabilities. Bubblewrap then applies the narrower workspace sandbox to agent commands.
+On Linux, Codex uses Bubblewrap for `workspace-write`. The image installs the distribution package as required by the official sandbox documentation. Compose disables Docker's outer seccomp and AppArmor profiles for the app container because they block Bubblewrap's nested namespace and mount setup; the app is not privileged and receives no added Linux capabilities. Bubblewrap then applies the narrower workspace sandbox to agent commands.
 
 The Codex child process receives an allowlisted environment rather than the full application environment. Generated HTML is checked for configured database, session, and model-provider secrets, and a failed or unchanged turn restores the previous draft.
 

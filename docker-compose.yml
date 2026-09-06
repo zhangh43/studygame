@@ -20,10 +20,12 @@ services:
     build: .
     restart: unless-stopped
     init: true
-    # Codex uses bubblewrap on Linux; Docker's default seccomp profile blocks
-    # the unprivileged namespace setup that implements workspace-write.
+    # Codex uses bubblewrap on Linux. Docker's default seccomp and AppArmor
+    # profiles block the nested namespace/mount setup used by workspace-write.
+    # Bubblewrap remains the inner filesystem sandbox for generated-code jobs.
     security_opt:
       - seccomp=unconfined
+      - apparmor=unconfined
     depends_on:
       db:
         condition: service_healthy
