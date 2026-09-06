@@ -1,0 +1,2 @@
+# Intentionally empty. The production container uses OPENAI_API_KEY and Codex defaults.
+# Set CODEX_CONFIG_PATH to a different read-only file only for a custom provider.

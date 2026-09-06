@@ -1,0 +1,56 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: game_studio
+      POSTGRES_USER: game_studio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U game_studio -d game_studio"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    init: true
+    # Codex uses bubblewrap on Linux; Docker's default seccomp profile blocks
+    # the unprivileged namespace setup that implements workspace-write.
+    security_opt:
+      - seccomp=unconfined
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgres://game_studio:${POSTGRES_PASSWORD}@db:5432/game_studio
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      CODEX_MODEL: ${CODEX_MODEL:-}
+      HARNESS_PROVIDER: codex
+      WORKSPACE_ROOT: /app/data/workspaces
+      PUBLISHED_ROOT: /app/data/published
+    volumes:
+      - game_data:/app/data
+      - codex_state:/home/node/.codex
+      - ${CODEX_CONFIG_PATH:-./docker/codex-config.toml}:/home/node/.codex/config.toml:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  game_data:
+  codex_state:
