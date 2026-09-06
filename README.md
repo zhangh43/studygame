@@ -85,6 +85,7 @@ docker compose logs -f app
 | `AZURE_OPENAI_API_KEY` | Optional credential forwarded when the mounted Codex configuration uses an Azure OpenAI provider |
 | `CODEX_CONFIG_PATH` | Optional read-only Codex configuration file mounted by Compose |
 | `CODEX_MODEL` | Optional explicit Codex model; blank uses the SDK default |
+| `CODEX_REASONING_EFFORT` | Optional reasoning effort; Compose defaults to `low` for responsive game generation |
 | `WORKSPACE_ROOT` | Private writable game workspaces |
 | `PUBLISHED_ROOT` | Immutable published artifacts |
 | `HARNESS_PROVIDER` | Currently `codex` |

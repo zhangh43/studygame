@@ -38,6 +38,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
       CODEX_MODEL: ${CODEX_MODEL:-}
+      CODEX_REASONING_EFFORT: ${CODEX_REASONING_EFFORT:-low}
       HARNESS_PROVIDER: codex
       WORKSPACE_ROOT: /app/data/workspaces
       PUBLISHED_ROOT: /app/data/published

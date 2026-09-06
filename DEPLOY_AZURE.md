@@ -48,6 +48,7 @@ CODEX_CONFIG_PATH=./docker/codex-config.toml
 APP_URL=http://<VM_PUBLIC_IP>:3000
 APP_PORT=3000
 CODEX_MODEL=
+CODEX_REASONING_EFFORT=low
 ```
 
 Restrict the file:
@@ -133,3 +134,16 @@ docker compose exec -T app \
 ```
 
 Success produces no output and exits with status zero. `Failed to make / slave: Permission denied` means the running container still has an AppArmor restriction; recreate it after confirming the Compose settings instead of merely restarting it.
+
+On Ubuntu 24.04, `bwrap: setting up uid map: Permission denied` means the host is still restricting unprivileged user namespaces. Following the official Codex Linux sandbox guidance, install and load Ubuntu's Bubblewrap profile on the VM host:
+
+```bash
+sudo apt update
+sudo apt install -y apparmor-profiles apparmor-utils
+sudo install -m 0644 \
+  /usr/share/apparmor/extra-profiles/bwrap-userns-restrict \
+  /etc/apparmor.d/bwrap-userns-restrict
+sudo apparmor_parser -r /etc/apparmor.d/bwrap-userns-restrict
+```
+
+Run the smoke test again after loading the profile. If the profile is unavailable or does not resolve the restriction, the official fallback is `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`. That fallback changes a host-wide security control, so use it only on a dedicated worker VM and review it before making it persistent.

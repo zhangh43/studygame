@@ -9,7 +9,7 @@ function activityFor(item: ThreadItem): HarnessEvent | null {
     case "file_change":
       return { type: "files", paths: item.changes.map((change) => path.basename(change.path)) };
     case "command_execution":
-      return { type: "activity", message: "Testing the game" };
+      return { type: "activity", message: "Building and checking the game" };
     case "reasoning":
       return { type: "activity", message: "Designing the next change" };
     case "error":
@@ -45,8 +45,14 @@ export class CodexHarness implements GameHarness {
   });
 
   async *run(request: HarnessRequest): AsyncGenerator<HarnessEvent> {
+    const startedAt = Date.now();
+    let firstItemMs: number | null = null;
+    let commandCount = 0;
+    let inputTokens: number | null = null;
+    let outputTokens: number | null = null;
     const options = {
       model: config.codexModel(),
+      modelReasoningEffort: config.codexReasoningEffort(),
       workingDirectory: request.workspace,
       sandboxMode: "workspace-write" as const,
       approvalPolicy: "never" as const,
@@ -63,9 +69,31 @@ export class CodexHarness implements GameHarness {
       signal: request.signal,
     });
 
-    for await (const event of streamed.events) {
-      const mapped = this.mapEvent(event);
-      if (mapped) yield mapped;
+    try {
+      for await (const event of streamed.events) {
+        if (firstItemMs === null && event.type === "item.started") {
+          firstItemMs = Date.now() - startedAt;
+        }
+        if (event.type === "item.completed" && event.item.type === "command_execution") {
+          commandCount += 1;
+        }
+        if (event.type === "turn.completed") {
+          inputTokens = event.usage.input_tokens;
+          outputTokens = event.usage.output_tokens;
+        }
+        const mapped = this.mapEvent(event);
+        if (mapped) yield mapped;
+      }
+    } finally {
+      console.info("Codex harness timing", {
+        model: options.model ?? "provider-default",
+        reasoningEffort: options.modelReasoningEffort ?? "provider-default",
+        totalMs: Date.now() - startedAt,
+        firstItemMs,
+        commandCount,
+        inputTokens,
+        outputTokens,
+      });
     }
     yield { type: "done" };
   }
