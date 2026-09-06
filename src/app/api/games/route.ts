@@ -12,9 +12,11 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const result = await db.query(
-    `SELECT id, title, status, public_slug AS "publicSlug", draft_revision AS "draftRevision",
-            published_revision AS "publishedRevision", updated_at AS "updatedAt"
-       FROM games WHERE tenant_id = $1 ORDER BY updated_at DESC`,
+    `SELECT g.id, g.title, g.status, g.public_slug AS "publicSlug", g.draft_revision AS "draftRevision",
+            g.published_revision AS "publishedRevision", g.updated_at AS "updatedAt",
+            count(gs.user_id)::int AS "starCount"
+       FROM games g LEFT JOIN game_stars gs ON gs.game_id = g.id
+      WHERE g.tenant_id = $1 GROUP BY g.id ORDER BY g.updated_at DESC`,
     [session.tenantId],
   );
   return NextResponse.json({ games: result.rows });

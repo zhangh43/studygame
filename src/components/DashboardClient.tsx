@@ -11,6 +11,7 @@ export type GameSummary = {
   publicSlug: string;
   draftRevision: number;
   publishedRevision: number | null;
+  starCount: number;
   updatedAt: string;
 };
 
@@ -20,6 +21,7 @@ export function DashboardClient({ initialGames, displayName }: { initialGames: G
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const totalStars = games.reduce((sum, game) => sum + game.starCount, 0);
 
   async function createGame(event: FormEvent) {
     event.preventDefault();
@@ -55,7 +57,7 @@ export function DashboardClient({ initialGames, displayName }: { initialGames: G
   return (
     <section className="dashboard-content">
       <div className="dashboard-heading">
-        <div><p className="eyebrow">Your workshop</p><h1>Welcome back, {displayName}.</h1><p className="muted">Turn an idea into a playable link.</p></div>
+        <div><p className="eyebrow">Your workshop</p><h1>Welcome back, {displayName}.</h1><p className="muted">{games.length} {games.length === 1 ? "game" : "games"} · ★ {totalStars} community {totalStars === 1 ? "star" : "stars"}</p></div>
         <form className="new-game-form" onSubmit={createGame}>
           <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={100} placeholder="Name your next game" required />
           <button className="primary-button" disabled={busy}>{busy ? "Creating…" : "New game"}</button>
@@ -71,11 +73,11 @@ export function DashboardClient({ initialGames, displayName }: { initialGames: G
               <div className="game-thumb"><span>{game.title.slice(0, 2).toUpperCase()}</span></div>
               <div className="game-card-body">
                 <div className="card-title-row"><h2>{game.title}</h2><span className={`status ${game.status}`}>{game.status}</span></div>
-                <p>Draft revision {game.draftRevision}{game.publishedRevision !== null ? ` · Published ${game.publishedRevision}` : ""}</p>
+                <p>Draft revision {game.draftRevision}{game.publishedRevision !== null ? ` · Published ${game.publishedRevision}` : ""} · ★ {game.starCount}</p>
                 <div className="card-actions">
                   <Link className="secondary-button" href={`/games/${game.id}`}>Open studio</Link>
                   {game.status === "published" ? (
-                    <><a className="text-link" href={`/g/${game.publicSlug}`} target="_blank">Play</a><button className="text-button" onClick={() => setPublished(game, false)}>Unpublish</button></>
+                    <><Link className="text-link" href={`/play/${game.publicSlug}`}>Play</Link><button className="text-button" onClick={() => setPublished(game, false)}>Unpublish</button></>
                   ) : (
                     <button className="text-button" onClick={() => setPublished(game, true)}>Publish</button>
                   )}

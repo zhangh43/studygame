@@ -41,7 +41,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         [game.revision, id, session.tenantId],
       );
     });
-    return NextResponse.json({ ok: true, url: `/g/${game.slug}` });
+    return NextResponse.json({ ok: true, url: `/play/${game.slug}` });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not publish game" },

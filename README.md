@@ -15,6 +15,10 @@ The first harness adapter uses the server-side [OpenAI Codex SDK](https://learn.
 - Authenticated draft previews in sandboxed iframes
 - Immutable publish snapshots and public game URLs
 - Publish and unpublish controls
+- Public game discovery and creator profile pages
+- One-star-per-user reactions and authenticated comments
+- Top-games and top-creators leaderboards
+- Per-game and per-creator star totals
 - Docker Compose deployment for an Azure VM
 
 ## Architecture
@@ -25,7 +29,7 @@ Browser → Next.js UI/API → PostgreSQL
                                                   ↓
                                          validation + snapshot
                                                   ↓
-                                          public /g/<slug>
+                                  social /play/<slug> → sandboxed /g/<slug>
 ```
 
 The application stores product state in PostgreSQL. Codex thread state is also persisted by the Codex runtime under its configured home directory. PostgreSQL remains the source of truth for mapping a tenant-owned game to a thread ID and workspace.
@@ -54,7 +58,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Open <http://localhost:3000>, register an account, create a game, and describe it in the studio chat.
+Open <http://localhost:3000>, register an account, create a game, and describe it in the studio chat. Published games appear in `/discover`; their social play pages live at `/play/<slug>` while `/g/<slug>` remains the isolated game document.
 
 To run PostgreSQL through Docker while keeping the app on your host, use port 5433 as shown in `.env.example`:
 

@@ -133,7 +133,7 @@ export function GameStudio({ game: initialGame, initialMessages }: { game: Game;
         <div className="preview-toolbar">
           <div><strong>Live draft</strong><span>Revision {game.draftRevision}</span></div>
           <div className="preview-actions">
-            {game.status === "published" && <a className="secondary-button" href={`/g/${game.publicSlug}`} target="_blank">Open published ↗</a>}
+            {game.status === "published" && <a className="secondary-button" href={`/play/${game.publicSlug}`} target="_blank">Open published ↗</a>}
             <button className={game.status === "published" ? "secondary-button" : "primary-button"} onClick={togglePublish}>{game.status === "published" ? "Unpublish" : "Publish"}</button>
           </div>
         </div>

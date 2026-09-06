@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { DashboardClient, type GameSummary } from "@/components/DashboardClient";
-import { LogoutButton } from "@/components/LogoutButton";
+import { SiteHeader } from "@/components/SiteHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -10,17 +10,16 @@ export default async function DashboardPage() {
   const session = await getSession();
   if (!session) redirect("/login");
   const result = await db.query<GameSummary>(
-    `SELECT id, title, status, public_slug AS "publicSlug", draft_revision AS "draftRevision",
-            published_revision AS "publishedRevision", updated_at::text AS "updatedAt"
-       FROM games WHERE tenant_id = $1 ORDER BY updated_at DESC`,
+    `SELECT g.id, g.title, g.status, g.public_slug AS "publicSlug", g.draft_revision AS "draftRevision",
+            g.published_revision AS "publishedRevision", g.updated_at::text AS "updatedAt",
+            count(gs.user_id)::int AS "starCount"
+       FROM games g LEFT JOIN game_stars gs ON gs.game_id = g.id
+      WHERE g.tenant_id = $1 GROUP BY g.id ORDER BY g.updated_at DESC`,
     [session.tenantId],
   );
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <div><span className="brand-mark small">AF</span><strong>Arcade Forge</strong></div>
-        <div className="topbar-user"><span>{session.tenantName}</span><LogoutButton /></div>
-      </header>
+      <SiteHeader session={session} />
       <DashboardClient initialGames={result.rows} displayName={session.displayName} />
     </main>
   );
