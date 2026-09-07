@@ -123,9 +123,7 @@ export function GameStudio({ game: initialGame, initialMessages }: { game: Game;
           {error && <p className="form-error" role="alert">{error}</p>}
         </div>
         <form className="composer" onSubmit={sendMessage}>
-          <textarea value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); }
-          }} placeholder="Describe a game or ask for a change…" maxLength={12000} disabled={busy} />
+          <textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Describe a game or ask for a change…" maxLength={12000} disabled={busy} />
           <button className="send-button" disabled={busy || !message.trim()} aria-label="Send">↑</button>
         </form>
       </section>
