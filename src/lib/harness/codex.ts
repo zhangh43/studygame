@@ -1,8 +1,11 @@
 import path from "node:path";
 import { Codex, type ThreadEvent, type ThreadItem } from "@openai/codex-sdk";
+import { AsyncSemaphore } from "@/lib/async-semaphore";
 import { config } from "@/lib/config";
 import { buildGamePrompt } from "@/lib/harness/prompt";
 import type { GameHarness, HarnessEvent, HarnessRequest } from "@/lib/harness/types";
+import { logError, logInfo, logWarn } from "@/lib/logging";
+import { redactProtectedValues } from "@/lib/secrets";
 
 function activityFor(item: ThreadItem): HarnessEvent | null {
   switch (item.type) {
@@ -20,6 +23,7 @@ function activityFor(item: ThreadItem): HarnessEvent | null {
 }
 
 export class CodexHarness implements GameHarness {
+  private readonly limiter = new AsyncSemaphore(config.harnessMaxConcurrency());
   private readonly codex = new Codex({
     apiKey: config.openAiApiKey(),
     // Do not expose database/session configuration to the Codex child process.
@@ -46,6 +50,12 @@ export class CodexHarness implements GameHarness {
 
   async *run(request: HarnessRequest): AsyncGenerator<HarnessEvent> {
     const startedAt = Date.now();
+    const wasQueued = !this.limiter.available;
+    if (wasQueued) {
+      yield { type: "activity", message: "Waiting for an available coding slot" };
+    }
+    const release = await this.limiter.acquire();
+    const queueMs = Date.now() - startedAt;
     let firstItemMs: number | null = null;
     let commandCount = 0;
     let commandMs = 0;
@@ -64,14 +74,22 @@ export class CodexHarness implements GameHarness {
       threadSource: "tenant-game-studio",
     };
 
-    const thread = request.sessionId
-      ? this.codex.resumeThread(request.sessionId, options)
-      : this.codex.startThread(options);
-    const streamed = await thread.runStreamed(buildGamePrompt(request.message), {
-      signal: request.signal,
+    logInfo("harness.slot_acquired", {
+      traceId: request.traceId,
+      queueMs,
+      wasQueued,
+      activeRuns: this.limiter.active,
+      pendingRuns: this.limiter.pending,
+      concurrencyLimit: this.limiter.limit,
     });
-
     try {
+      const thread = request.sessionId
+        ? this.codex.resumeThread(request.sessionId, options)
+        : this.codex.startThread(options);
+      const streamed = await thread.runStreamed(buildGamePrompt(request.message), {
+        signal: request.signal,
+      });
+
       for await (const event of streamed.events) {
         if (firstItemMs === null && event.type === "item.started") {
           firstItemMs = Date.now() - startedAt;
@@ -84,6 +102,20 @@ export class CodexHarness implements GameHarness {
           const commandStart = commandStartedAt.get(event.item.id);
           if (commandStart !== undefined) commandMs += Date.now() - commandStart;
           commandStartedAt.delete(event.item.id);
+          if (event.item.status === "failed" || (event.item.exit_code !== undefined && event.item.exit_code !== 0)) {
+            logWarn("harness.command_failed", {
+              traceId: request.traceId,
+              exitCode: event.item.exit_code,
+              status: event.item.status,
+              output: redactProtectedValues(event.item.aggregated_output).slice(-4_000),
+            });
+          }
+        }
+        if (event.type === "item.completed" && event.item.type === "file_change" && event.item.status === "failed") {
+          logWarn("harness.file_change_failed", {
+            traceId: request.traceId,
+            paths: event.item.changes.map((change) => path.basename(change.path)),
+          });
         }
         if (event.type === "turn.completed") {
           inputTokens = event.usage.input_tokens;
@@ -92,18 +124,30 @@ export class CodexHarness implements GameHarness {
         const mapped = this.mapEvent(event);
         if (mapped) yield mapped;
       }
+    } catch (error) {
+      logError("harness.run_failed", error, {
+        traceId: request.traceId,
+        queueMs,
+        activeRuns: this.limiter.active,
+      });
+      throw error;
     } finally {
       const totalMs = Date.now() - startedAt;
-      console.info("Codex harness timing", {
+      release();
+      logInfo("harness.run_finished", {
+        traceId: request.traceId,
         model: options.model ?? "provider-default",
         reasoningEffort: options.modelReasoningEffort ?? "provider-default",
         totalMs,
+        queueMs,
         firstItemMs,
         commandCount,
         commandMs,
         modelAndQueueMs: totalMs - commandMs,
         inputTokens,
         outputTokens,
+        activeRuns: this.limiter.active,
+        pendingRuns: this.limiter.pending,
       });
     }
     yield { type: "done" };

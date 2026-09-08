@@ -1,6 +1,6 @@
 # Deploy Arcade Forge to an Azure VM
 
-This guide deploys the MVP as two Docker containers on one Ubuntu VM: the Next.js/Codex application and PostgreSQL. Persistent Docker volumes hold the database, private game workspaces, published snapshots, and Codex thread state.
+This guide deploys the MVP as three Docker containers on one Ubuntu VM: the Caddy HTTPS proxy, Next.js/Codex application, and PostgreSQL. Persistent Docker volumes hold TLS state, the database, private game workspaces, published snapshots, and Codex thread state.
 
 ## 1. Create the VM
 
@@ -9,9 +9,11 @@ Create an Ubuntu 24.04 LTS VM. A reasonable private-beta starting point is 4 vCP
 In the Network Security Group, allow:
 
 - TCP 22 only from your administrator IP
-- TCP 3000 from the intended audience for initial IP-based testing
+- TCP 80 and 443 from the intended audience
 
-Do not expose PostgreSQL port 5432. The Compose file exposes it only to the private Docker network.
+Do not expose PostgreSQL port 5432 or application port 3000. The Compose file can bind port 3000 to loopback while Caddy reaches the app over the private Docker network.
+
+Create a DNS `A` record such as `games.example.com` pointing to the VM's static public IP. A publicly trusted TLS certificate requires a DNS name; do not use the raw IP as `DOMAIN`.
 
 ## 2. Install Docker
 
@@ -40,15 +42,20 @@ Set the remaining values:
 
 ```dotenv
 POSTGRES_PASSWORD=<random-hex-value>
+POSTGRES_MAX_CONNECTIONS=100
+DB_POOL_MAX=30
 SESSION_SECRET=<different-random-hex-value>
 OPENAI_API_KEY=<server-side-openai-key>
 # Set this instead if your Codex configuration uses an Azure OpenAI provider:
 AZURE_OPENAI_API_KEY=
 CODEX_CONFIG_PATH=./docker/codex-config.toml
-APP_URL=http://<VM_PUBLIC_IP>:3000
+DOMAIN=games.example.com
+APP_URL=https://games.example.com
+APP_BIND_ADDRESS=127.0.0.1
 APP_PORT=3000
 CODEX_MODEL=
 CODEX_REASONING_EFFORT=low
+HARNESS_MAX_CONCURRENCY=4
 ```
 
 Restrict the file:
@@ -62,22 +69,25 @@ chmod 600 .env
 ## 4. Build and launch
 
 ```bash
-docker compose up -d --build
+docker compose --profile https up -d --build
 docker compose ps
 docker compose logs -f app
+docker compose logs -f proxy
 ```
 
-The app container waits for PostgreSQL, applies versioned migrations, and starts the web service. Check:
+The app container waits for PostgreSQL, applies versioned migrations, and starts the web service. Caddy obtains and renews the HTTPS certificate automatically. Check:
 
 ```bash
-curl http://localhost:3000/api/health
+curl https://games.example.com/api/health
 ```
 
-Then visit `http://<VM_PUBLIC_IP>:3000` from a browser. Published games use URLs such as:
+Then visit `https://games.example.com` from a browser. Published games use URLs such as:
 
 ```text
-http://<VM_PUBLIC_IP>:3000/g/my-game-randomslug
+https://games.example.com/play/my-game-randomslug
 ```
+
+Port 80 must remain reachable so Caddy can redirect HTTP and renew certificates. If certificate issuance fails, verify DNS first, then inspect `docker compose logs proxy`.
 
 ## 5. Updating
 
@@ -105,13 +115,28 @@ The database and game data must be backed up from approximately the same point i
 
 Before opening registration to the public:
 
-1. Put a domain and HTTPS reverse proxy or Azure Application Gateway in front of port 3000. Change `APP_URL` to the exact `https://` origin; secure cookies will then be enabled automatically.
-2. Close public access to port 3000 after the reverse proxy is active.
+1. Keep `APP_URL` equal to the exact public HTTPS origin; secure cookies are then enabled automatically.
+2. Keep public access to port 3000 closed and bind it to `127.0.0.1`.
 3. Move PostgreSQL to Azure Database for PostgreSQL or establish automated encrypted backups.
 4. Move published artifacts to Blob Storage/CDN if traffic grows.
 5. Add email verification, password reset, administrative controls, abuse detection, quotas, and per-tenant usage accounting.
 6. Move Codex execution to disposable per-job containers or microVMs. Mount only one game workspace, disable network, and inject no database or publication credentials.
 7. Add browser automation tests and malware/content moderation appropriate to your audience before publication.
+
+## Capacity and generation logs
+
+`DB_POOL_MAX=30` limits concurrent database queries, not logged-in users. Sessions and users do not hold dedicated connections, so 30 active users are supported; ordinary browsing usually uses a connection only for milliseconds. PostgreSQL retains 70 connections of headroom with `POSTGRES_MAX_CONNECTIONS=100`. If you add application replicas, the sum of every replica's pool must remain safely below the server limit.
+
+Codex processes are much heavier than database queries. `HARNESS_MAX_CONCURRENCY=4` allows four games to generate simultaneously on one VM and queues further requests. Tune this after observing VM memory, CPU, and Azure model rate limits. Two requests for the same game are never run simultaneously.
+
+Generation logs are structured JSON and include a `traceId`, `jobId`, and `gameId`. The same trace ID appears in user-facing generation errors. Useful commands are:
+
+```bash
+docker compose logs --since=30m app
+docker compose logs -f app
+```
+
+The app emits 15-second SSE heartbeats. If a browser or proxy disconnects, the server records `generation.client_disconnected` but continues generating and saving the game. A container or VM shutdown still interrupts in-memory jobs; a durable external worker queue is the next scaling step when a single VM is no longer sufficient.
 
 The last point is essential for hostile multi-tenancy. A logical workspace directory plus the Codex sandbox is useful defense in depth, but the worker’s container or VM boundary should be the authoritative tenant isolation boundary.
 

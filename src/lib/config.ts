@@ -9,6 +9,15 @@ function required(name: string): string {
   return value;
 }
 
+function boundedInteger(name: string, fallback: number, minimum: number, maximum: number): number {
+  const raw = process.env[name];
+  const value = raw === undefined || raw === "" ? fallback : Number(raw);
+  if (!Number.isInteger(value) || value < minimum || value > maximum) {
+    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`);
+  }
+  return value;
+}
+
 function codexReasoningEffort(): CodexReasoningEffort | undefined {
   const value = process.env.CODEX_REASONING_EFFORT;
   if (!value) return undefined;
@@ -20,6 +29,7 @@ function codexReasoningEffort(): CodexReasoningEffort | undefined {
 
 export const config = {
   databaseUrl: () => process.env.DATABASE_URL ?? "postgres://game_studio:game_studio@localhost:5432/game_studio",
+  databasePoolMax: () => boundedInteger("DB_POOL_MAX", 30, 1, 90),
   appUrl: () => process.env.APP_URL ?? "http://localhost:3000",
   sessionSecret: () => required("SESSION_SECRET"),
   workspaceRoot: () => path.resolve(/* turbopackIgnore: true */ process.env.WORKSPACE_ROOT ?? "./data/workspaces"),
@@ -27,6 +37,7 @@ export const config = {
   harnessProvider: () => process.env.HARNESS_PROVIDER ?? "codex",
   codexModel: () => process.env.CODEX_MODEL || undefined,
   codexReasoningEffort,
+  harnessMaxConcurrency: () => boundedInteger("HARNESS_MAX_CONCURRENCY", 4, 1, 30),
   openAiApiKey: () => process.env.OPENAI_API_KEY || undefined,
   nodeEnv: () => process.env.NODE_ENV ?? "development",
 };

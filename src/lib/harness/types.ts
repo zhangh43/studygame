@@ -10,6 +10,7 @@ export type HarnessRequest = {
   sessionId?: string | null;
   message: string;
   signal?: AbortSignal;
+  traceId?: string;
 };
 
 export interface GameHarness {

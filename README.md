@@ -19,6 +19,9 @@ The first harness adapter uses the server-side [OpenAI Codex SDK](https://learn.
 - One-star-per-user reactions and authenticated comments
 - Top-games and top-creators leaderboards
 - Per-game and per-creator star totals
+- Thirty-connection PostgreSQL pool and bounded Codex concurrency
+- Disconnect-tolerant generation streams with keepalive events and traceable JSON logs
+- Optional automatic HTTPS through Caddy
 - Docker Compose deployment for an Azure VM
 
 ## Architecture
@@ -83,13 +86,18 @@ docker compose logs -f app
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string for host development |
 | `POSTGRES_PASSWORD` | Password used by Docker Compose |
+| `POSTGRES_MAX_CONNECTIONS` | PostgreSQL server connection limit; Compose defaults to `100` |
+| `DB_POOL_MAX` | Maximum database connections per application container; defaults to `30` |
+| `APP_BIND_ADDRESS` | Host address for the direct app port; use `127.0.0.1` behind HTTPS |
 | `APP_URL` | Public origin; controls secure session cookies |
+| `DOMAIN` | Public DNS name used by the optional Caddy HTTPS profile |
 | `SESSION_SECRET` | At least 32 random characters used to bind session tokens |
 | `OPENAI_API_KEY` | Server-only credential passed to the Codex SDK |
 | `AZURE_OPENAI_API_KEY` | Optional credential forwarded when the mounted Codex configuration uses an Azure OpenAI provider |
 | `CODEX_CONFIG_PATH` | Optional read-only Codex configuration file mounted by Compose |
 | `CODEX_MODEL` | Optional explicit Codex model; blank uses the SDK default |
 | `CODEX_REASONING_EFFORT` | Optional reasoning effort; Compose defaults to `low` for responsive game generation |
+| `HARNESS_MAX_CONCURRENCY` | Maximum simultaneous Codex runs per app container; defaults to `4` |
 | `WORKSPACE_ROOT` | Private writable game workspaces |
 | `PUBLISHED_ROOT` | Immutable published artifacts |
 | `HARNESS_PROVIDER` | Currently `codex` |
@@ -115,6 +123,20 @@ The thread ID is recorded only after Codex emits `thread.started`. Each subseque
 On Linux, Codex uses Bubblewrap for `workspace-write`. The image installs the distribution package as required by the official sandbox documentation. Compose disables Docker's outer seccomp and AppArmor profiles for the app container because they block Bubblewrap's nested namespace and mount setup; the app is not privileged and receives no added Linux capabilities. Bubblewrap then applies the narrower workspace sandbox to agent commands.
 
 The Codex child process receives an allowlisted environment rather than the full application environment. Generated HTML is checked for configured database, session, and model-provider secrets, and a failed or unchanged turn restores the previous draft.
+
+## Concurrency and diagnostics
+
+Logged-in users do not reserve database connections. A connection is borrowed only while a query is running, so the default 30-connection application pool supports substantially more than 30 signed-in or browsing users. Expensive Codex jobs are separately limited by `HARNESS_MAX_CONCURRENCY`; excess jobs wait in memory and the UI reports that it is waiting for a coding slot. The unique database index on running jobs still prevents two generations from modifying the same game simultaneously.
+
+Generation is not cancelled when the browser reloads or its SSE connection drops. The server continues the job, validates the result, and saves it. The stream sends a keepalive every 15 seconds for reverse proxies. Application logs are single-line JSON with events such as `generation.started`, `harness.run_finished`, `harness.command_failed`, and `generation.failed`. Errors shown in the UI include the same `traceId` recorded in the logs.
+
+To run the included automatic HTTPS proxy after pointing a DNS name at the server:
+
+```bash
+docker compose --profile https up -d --build
+```
+
+Set `DOMAIN` to the DNS name, `APP_URL` to its exact `https://` origin, and `APP_BIND_ADDRESS=127.0.0.1`. Caddy obtains and renews the public certificate and disables response buffering for generation streams.
 
 ## Verification
 

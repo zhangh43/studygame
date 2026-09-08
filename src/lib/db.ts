@@ -1,5 +1,6 @@
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 import { config } from "@/lib/config";
+import { logError } from "@/lib/logging";
 
 const globalForDb = globalThis as unknown as { gameStudioPool?: Pool };
 
@@ -7,9 +8,16 @@ export const db =
   globalForDb.gameStudioPool ??
   new Pool({
     connectionString: config.databaseUrl(),
-    max: 10,
+    max: config.databasePoolMax(),
+    connectionTimeoutMillis: 10_000,
     idleTimeoutMillis: 30_000,
   });
+
+db.on("error", (error) => logError("database.pool_error", error, {
+  totalConnections: db.totalCount,
+  idleConnections: db.idleCount,
+  waitingRequests: db.waitingCount,
+}));
 
 if (config.nodeEnv() !== "production") globalForDb.gameStudioPool = db;
 
