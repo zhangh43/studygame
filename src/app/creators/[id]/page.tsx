@@ -3,13 +3,14 @@ import { getSession } from "@/lib/auth";
 import { db, queryOne } from "@/lib/db";
 import { PublishedGameCard, type PublishedGameSummary } from "@/components/PublishedGameCard";
 import { SiteHeader } from "@/components/SiteHeader";
+import { getTranslations } from "@/lib/i18n-server";
 
 export const dynamic = "force-dynamic";
 
 type Creator = { id: string; name: string; starCount: number; gameCount: number };
 
 export default async function CreatorPage({ params }: { params: Promise<{ id: string }> }) {
-  const [session, { id }] = await Promise.all([getSession(), params]);
+  const [session, { id }, t] = await Promise.all([getSession(), params, getTranslations()]);
   const creator = await queryOne<Creator>(
     `SELECT u.id, u.display_name AS name,
             count(DISTINCT g.id)::int AS "gameCount", count(gs.user_id)::int AS "starCount"
@@ -33,8 +34,8 @@ export default async function CreatorPage({ params }: { params: Promise<{ id: st
   );
   return (
     <main className="app-shell"><SiteHeader session={session} /><section className="community-content">
-      <div className="creator-hero"><div className="creator-avatar">{creator.name.slice(0, 2).toUpperCase()}</div><div><p className="eyebrow">Creator profile</p><h1>{creator.name}</h1><p><strong>★ {creator.starCount}</strong> stars across {creator.gameCount} published {creator.gameCount === 1 ? "game" : "games"}</p></div></div>
-      {games.rows.length ? <div className="game-grid">{games.rows.map((game) => <PublishedGameCard game={game} key={game.id} />)}</div> : <div className="empty-state"><p>This creator has no published games right now.</p></div>}
+      <div className="creator-hero"><div className="creator-avatar">{creator.name.slice(0, 2).toUpperCase()}</div><div><p className="eyebrow">{t("creator.profile")}</p><h1>{creator.name}</h1><p><strong>★ {creator.starCount}</strong> {t("creator.summary", { count: creator.gameCount, gameWord: t(creator.gameCount === 1 ? "dashboard.game" : "dashboard.games") })}</p></div></div>
+      {games.rows.length ? <div className="game-grid">{games.rows.map((game) => <PublishedGameCard game={game} key={game.id} />)}</div> : <div className="empty-state"><p>{t("creator.empty")}</p></div>}
     </section></main>
   );
 }

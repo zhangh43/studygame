@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { db, queryOne } from "@/lib/db";
 import { GameStudio, type StudioMessage } from "@/components/GameStudio";
+import { getTranslations } from "@/lib/i18n-server";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ type Game = {
 };
 
 export default async function GamePage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
+  const [session, t] = await Promise.all([getSession(), getTranslations()]);
   if (!session) redirect("/login");
   const { id } = await params;
   const game = await queryOne<Game>(
@@ -35,8 +36,8 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
   return (
     <main className="studio-shell">
       <header className="studio-header">
-        <div className="studio-title"><Link href="/dashboard" aria-label="Back to dashboard">←</Link><div><span>Game studio</span><h1>{game.title}</h1></div></div>
-        <div className="studio-state"><span className={`status ${game.status}`}>{game.status}</span></div>
+        <div className="studio-title"><Link href="/dashboard" aria-label={t("studio.back")}>←</Link><div><span>{t("studio.title")}</span><h1>{game.title}</h1></div></div>
+        <div className="studio-state"><span className={`status ${game.status}`}>{t(game.status === "published" ? "common.published" : "common.draft")}</span></div>
       </header>
       <GameStudio game={game} initialMessages={messages.rows} />
     </main>

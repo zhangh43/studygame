@@ -2,9 +2,12 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useI18n } from "@/components/I18nProvider";
+import { translateApiError } from "@/lib/i18n";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const router = useRouter();
+  const { locale, t } = useI18n();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -18,13 +21,13 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: data.get("name"),
-        email: data.get("email"),
+        identifier: data.get("identifier"),
         password: data.get("password"),
       }),
     });
     const result = await response.json();
     if (!response.ok) {
-      setError(result.error ?? "Something went wrong.");
+      setError(translateApiError(locale, result.error, t("auth.genericError")));
       setBusy(false);
       return;
     }
@@ -35,12 +38,12 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   return (
     <form className="stack-form" onSubmit={submit}>
       {mode === "register" && (
-        <label>Display name<input name="name" autoComplete="name" minLength={2} required /></label>
+        <label>{t("auth.displayName")}<input name="name" autoComplete="name" minLength={2} required /></label>
       )}
-      <label>Email<input name="email" type="email" autoComplete="email" required /></label>
-      <label>Password<input name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={mode === "register" ? 10 : 1} required /></label>
+      <label>{t("auth.identifier")}<input name="identifier" type="text" autoComplete="username" maxLength={254} required /></label>
+      <label>{t("auth.password")}<input name="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={mode === "register" ? 6 : 1} placeholder={mode === "register" ? t("auth.passwordHint") : undefined} required /></label>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <button className="primary-button" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create studio"}</button>
+      <button className="primary-button" disabled={busy}>{busy ? t("auth.wait") : mode === "login" ? t("auth.signIn") : t("auth.createStudio")}</button>
     </form>
   );
 }

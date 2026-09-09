@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useMemo, useRef, useState } from "react";
+import { useI18n } from "@/components/I18nProvider";
+import { translateApiError, type MessageKey } from "@/lib/i18n";
 
 export type StudioMessage = {
   id: string;
@@ -27,6 +29,7 @@ type StreamEvent =
   | { type: "session" | "done" };
 
 export function GameStudio({ game: initialGame, initialMessages }: { game: Game; initialMessages: StudioMessage[] }) {
+  const { locale, t } = useI18n();
   const [game, setGame] = useState(initialGame);
   const [messages, setMessages] = useState(initialMessages);
   const [message, setMessage] = useState("");
@@ -36,14 +39,25 @@ export function GameStudio({ game: initialGame, initialMessages }: { game: Game;
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previewUrl = useMemo(() => `/api/games/${game.id}/preview?revision=${game.draftRevision}`, [game.id, game.draftRevision]);
 
+  function localizeActivity(activity: string) {
+    const keys: Record<string, MessageKey> = {
+      "Building and checking the game": "studio.activity.building",
+      "Designing the next change": "studio.activity.designing",
+      "Waiting for an available coding slot": "studio.activity.waiting",
+      "Codex is working": "studio.activity.working",
+      "Repairing validation problems": "studio.activity.repairing",
+    };
+    return keys[activity] ? t(keys[activity]) : activity;
+  }
+
   function handleStreamEvent(event: StreamEvent, assistant: { value: string }) {
-    if (event.type === "activity") setStatus(event.message);
-    if (event.type === "files") setStatus(`Updated ${event.paths.join(", ")}`);
+    if (event.type === "activity") setStatus(localizeActivity(event.message));
+    if (event.type === "files") setStatus(t("studio.updatedFiles", { files: event.paths.join(", ") }));
     if (event.type === "assistant") assistant.value = event.message;
     if (event.type === "error") throw new Error(event.message);
     if (event.type === "revision") {
       setGame((current) => ({ ...current, draftRevision: event.revision }));
-      setStatus("Game updated");
+      setStatus(t("studio.updated"));
     }
   }
 
@@ -54,10 +68,10 @@ export function GameStudio({ game: initialGame, initialMessages }: { game: Game;
     setMessage("");
     setBusy(true);
     setError("");
-    setStatus("Starting Codex…");
+    setStatus(t("studio.starting"));
     const optimistic: StudioMessage = { id: `local-${Date.now()}`, role: "user", content: text, createdAt: new Date().toISOString() };
     setMessages((current) => [...current, optimistic]);
-    const assistant = { value: "The game was updated successfully." };
+    const assistant = { value: t("studio.success") };
 
     try {
       const response = await fetch(`/api/games/${game.id}/chat`, {
@@ -67,7 +81,7 @@ export function GameStudio({ game: initialGame, initialMessages }: { game: Game;
       });
       if (!response.ok || !response.body) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? "Generation could not start.");
+        throw new Error(translateApiError(locale, body.error, t("studio.startError")));
       }
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -91,7 +105,7 @@ export function GameStudio({ game: initialGame, initialMessages }: { game: Game;
       }]);
       setTimeout(() => { if (iframeRef.current) iframeRef.current.src = previewUrl.split("?")[0] + `?t=${Date.now()}`; }, 0);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Generation failed.");
+      setError(caught instanceof Error ? translateApiError(locale, caught.message, t("studio.generationError")) : t("studio.generationError"));
       setStatus("");
     } finally {
       setBusy(false);
@@ -103,7 +117,7 @@ export function GameStudio({ game: initialGame, initialMessages }: { game: Game;
     const publishing = game.status !== "published";
     const response = await fetch(`/api/games/${game.id}/publish`, { method: publishing ? "POST" : "DELETE" });
     const result = await response.json();
-    if (!response.ok) return setError(result.error ?? "Publication failed.");
+    if (!response.ok) return setError(translateApiError(locale, result.error, t("studio.publishError")));
     setGame((current) => ({
       ...current,
       status: publishing ? "published" : "draft",
@@ -116,23 +130,23 @@ export function GameStudio({ game: initialGame, initialMessages }: { game: Game;
       <section className="chat-panel">
         <div className="message-list" aria-live="polite">
           {messages.length === 0 && (
-            <div className="chat-intro"><span>✦</span><h2>What should we build?</h2><p>Try “Make a colorful snake game with touch controls and increasing speed.”</p></div>
+            <div className="chat-intro"><span>✦</span><h2>{t("studio.introTitle")}</h2><p>{t("studio.introText")}</p></div>
           )}
-          {messages.map((item) => <div className={`message ${item.role}`} key={item.id}><span>{item.role === "user" ? "You" : "Forge"}</span><p>{item.content}</p></div>)}
-          {busy && <div className="activity"><i /><span>{status || "Working…"}</span></div>}
+          {messages.map((item) => <div className={`message ${item.role}`} key={item.id}><span>{item.role === "user" ? t("studio.you") : "Forge"}</span><p>{item.content}</p></div>)}
+          {busy && <div className="activity"><i /><span>{status || t("studio.working")}</span></div>}
           {error && <p className="form-error" role="alert">{error}</p>}
         </div>
         <form className="composer" onSubmit={sendMessage}>
-          <textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Describe a game or ask for a change…" maxLength={12000} disabled={busy} />
-          <button className="send-button" disabled={busy || !message.trim()} aria-label="Send">↑</button>
+          <textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder={t("studio.prompt")} maxLength={12000} disabled={busy} />
+          <button className="send-button" disabled={busy || !message.trim()} aria-label={t("studio.send")}>↑</button>
         </form>
       </section>
       <section className="preview-panel">
         <div className="preview-toolbar">
-          <div><strong>Live draft</strong><span>Revision {game.draftRevision}</span></div>
+          <div><strong>{t("studio.liveDraft")}</strong><span>{t("studio.revision", { revision: game.draftRevision })}</span></div>
           <div className="preview-actions">
-            {game.status === "published" && <a className="secondary-button" href={`/play/${game.publicSlug}`} target="_blank">Open published ↗</a>}
-            <button className={game.status === "published" ? "secondary-button" : "primary-button"} onClick={togglePublish}>{game.status === "published" ? "Unpublish" : "Publish"}</button>
+            {game.status === "published" && <a className="secondary-button" href={`/play/${game.publicSlug}`} target="_blank">{t("studio.openPublished")}</a>}
+            <button className={game.status === "published" ? "secondary-button" : "primary-button"} onClick={togglePublish}>{t(game.status === "published" ? "common.unpublish" : "common.publish")}</button>
           </div>
         </div>
         <div className="browser-frame">

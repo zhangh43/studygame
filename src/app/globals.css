@@ -18,6 +18,11 @@ button, input, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 a { color: inherit; }
 
+.language-switcher { position: fixed; right: 1rem; bottom: 1rem; z-index: 100; display: flex; gap: .2rem; border: 1px solid var(--line); border-radius: 99px; padding: .22rem; background: rgb(255 254 250 / 94%); box-shadow: 0 8px 25px rgb(31 34 48 / 16%); backdrop-filter: blur(12px); }
+.language-switcher button { min-width: 2.7rem; border: 0; border-radius: 99px; padding: .38rem .62rem; background: transparent; color: var(--muted); font-size: .75rem; font-weight: 800; cursor: pointer; }
+.language-switcher button.active { background: var(--ink); color: white; }
+.language-switcher button:disabled { cursor: wait; }
+
 .auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 2rem; background: radial-gradient(circle at 20% 15%, #f7c6a5 0, transparent 30%), radial-gradient(circle at 85% 80%, #c9c4f4 0, transparent 32%), var(--paper); }
 .auth-panel { width: min(100%, 28rem); padding: 2.5rem; border: 1px solid rgb(255 255 255 / 70%); border-radius: 1.5rem; background: rgb(255 254 250 / 88%); box-shadow: var(--shadow); backdrop-filter: blur(18px); }
 .brand-mark { display: inline-grid; width: 2.8rem; height: 2.8rem; place-items: center; border-radius: .8rem; background: var(--ink); color: white; font-weight: 850; letter-spacing: -.08em; transform: rotate(-3deg); }

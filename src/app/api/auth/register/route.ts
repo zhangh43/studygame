@@ -7,15 +7,15 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   name: z.string().trim().min(2).max(80),
-  email: z.string().trim().toLowerCase().email().max(254),
-  password: z.string().min(10).max(200),
+  identifier: z.string().trim().toLowerCase().min(1).max(254),
+  password: z.string().min(6).max(200),
 });
 
 export async function POST(request: Request) {
   if (!isTrustedMutation(request)) return NextResponse.json({ error: "Untrusted origin" }, { status: 403 });
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Enter a valid name, email, and password of at least 10 characters." }, { status: 400 });
+    return NextResponse.json({ error: "Enter a valid display name, email/user name, and a password of at least 6 characters." }, { status: 400 });
   }
 
   try {
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
       const user = await client.query<{ id: string }>(
         `INSERT INTO users(email, display_name, password_hash)
          VALUES ($1, $2, $3) RETURNING id`,
-        [parsed.data.email, parsed.data.name, passwordHash],
+        [parsed.data.identifier, parsed.data.name, passwordHash],
       );
       const tenant = await client.query<{ id: string }>(
         "INSERT INTO tenants(name) VALUES ($1) RETURNING id",
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     if ((error as { code?: string }).code === "23505") {
-      return NextResponse.json({ error: "An account with that email already exists." }, { status: 409 });
+      return NextResponse.json({ error: "An account with that email/user name already exists." }, { status: 409 });
     }
     console.error(error);
     return NextResponse.json({ error: "Could not create the account." }, { status: 500 });

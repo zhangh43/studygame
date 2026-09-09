@@ -2,11 +2,12 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { PublishedGameCard, type PublishedGameSummary } from "@/components/PublishedGameCard";
 import { SiteHeader } from "@/components/SiteHeader";
+import { getTranslations } from "@/lib/i18n-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function DiscoverPage() {
-  const [session, games] = await Promise.all([
+  const [session, games, t] = await Promise.all([
     getSession(),
     db.query<PublishedGameSummary>(
       `SELECT g.id, g.title, g.public_slug AS "publicSlug", u.id AS "creatorId",
@@ -21,13 +22,14 @@ export default async function DiscoverPage() {
         ORDER BY g.updated_at DESC
         LIMIT 60`,
     ),
+    getTranslations(),
   ]);
   return (
     <main className="app-shell">
       <SiteHeader session={session} />
       <section className="community-content">
-        <div className="community-hero"><p className="eyebrow">Made by the community</p><h1>Pick a game. Chase a score.</h1><p>Small browser games imagined and built by Arcade Forge creators.</p></div>
-        {games.rows.length ? <div className="game-grid">{games.rows.map((game) => <PublishedGameCard game={game} key={game.id} />)}</div> : <div className="empty-state"><span>✦</span><h2>The arcade is waiting</h2><p>Publish the first community game from your workshop.</p></div>}
+        <div className="community-hero"><p className="eyebrow">{t("discover.eyebrow")}</p><h1>{t("discover.title")}</h1><p>{t("discover.subtitle")}</p></div>
+        {games.rows.length ? <div className="game-grid">{games.rows.map((game) => <PublishedGameCard game={game} key={game.id} />)}</div> : <div className="empty-state"><span>✦</span><h2>{t("discover.emptyTitle")}</h2><p>{t("discover.emptyText")}</p></div>}
       </section>
     </main>
   );

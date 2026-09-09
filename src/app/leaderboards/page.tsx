@@ -3,13 +3,14 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { PublishedGameCard, type PublishedGameSummary } from "@/components/PublishedGameCard";
 import { SiteHeader } from "@/components/SiteHeader";
+import { getTranslations } from "@/lib/i18n-server";
 
 export const dynamic = "force-dynamic";
 
 type CreatorRank = { id: string; name: string; starCount: number; gameCount: number };
 
 export default async function LeaderboardsPage() {
-  const [session, games, creators] = await Promise.all([
+  const [session, games, creators, t] = await Promise.all([
     getSession(),
     db.query<PublishedGameSummary>(
       `SELECT g.id, g.title, g.public_slug AS "publicSlug", u.id AS "creatorId",
@@ -32,15 +33,16 @@ export default async function LeaderboardsPage() {
         ORDER BY count(gs.user_id) DESC, count(DISTINCT g.id) DESC, u.display_name
         LIMIT 20`,
     ),
+    getTranslations(),
   ]);
   return (
     <main className="app-shell">
       <SiteHeader session={session} />
       <section className="community-content">
-        <div className="community-hero compact-hero"><p className="eyebrow">Hall of fame</p><h1>Community leaderboards</h1><p>Ranked by stars on currently published games.</p></div>
+        <div className="community-hero compact-hero"><p className="eyebrow">{t("leaderboards.eyebrow")}</p><h1>{t("leaderboards.title")}</h1><p>{t("leaderboards.subtitle")}</p></div>
         <div className="leaderboard-layout">
-          <section><h2 className="section-title">Top games</h2>{games.rows.length ? <div className="ranked-game-grid">{games.rows.map((game, index) => <PublishedGameCard game={game} rank={index + 1} key={game.id} />)}</div> : <p className="muted">No published games yet.</p>}</section>
-          <aside><h2 className="section-title">Top creators</h2><ol className="creator-ranking">{creators.rows.map((creator, index) => <li key={creator.id}><b>{index + 1}</b><div><Link href={`/creators/${creator.id}`}>{creator.name}</Link><span>{creator.gameCount} published {creator.gameCount === 1 ? "game" : "games"}</span></div><strong>★ {creator.starCount}</strong></li>)}</ol></aside>
+          <section><h2 className="section-title">{t("leaderboards.topGames")}</h2>{games.rows.length ? <div className="ranked-game-grid">{games.rows.map((game, index) => <PublishedGameCard game={game} rank={index + 1} key={game.id} />)}</div> : <p className="muted">{t("leaderboards.noGames")}</p>}</section>
+          <aside><h2 className="section-title">{t("leaderboards.topCreators")}</h2><ol className="creator-ranking">{creators.rows.map((creator, index) => <li key={creator.id}><b>{index + 1}</b><div><Link href={`/creators/${creator.id}`}>{creator.name}</Link><span>{t("leaderboards.creatorGames", { count: creator.gameCount, gameWord: t(creator.gameCount === 1 ? "dashboard.game" : "dashboard.games") })}</span></div><strong>★ {creator.starCount}</strong></li>)}</ol></aside>
         </div>
       </section>
     </main>

@@ -6,7 +6,8 @@ The first harness adapter uses the server-side [OpenAI Codex SDK](https://learn.
 
 ## Included in this MVP
 
-- Email/password registration and opaque server-side sessions
+- Email-or-username/password registration and opaque server-side sessions
+- Persistent English/Chinese interface switching
 - Tenant-scoped games, messages, jobs, and artifacts in PostgreSQL
 - One persistent Codex thread and workspace per game
 - Streaming harness activity into the chat UI
@@ -61,7 +62,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Open <http://localhost:3000>, register an account, create a game, and describe it in the studio chat. Published games appear in `/discover`; their social play pages live at `/play/<slug>` while `/g/<slug>` remains the isolated game document.
+Open <http://localhost:3000>, register with an email address or user name and a password of at least six characters, create a game, and describe it in the studio chat. Published games appear in `/discover`; their social play pages live at `/play/<slug>` while `/g/<slug>` remains the isolated game document. Use the EN/中文 switch in the lower-right corner to persist the interface language.
 
 To run PostgreSQL through Docker while keeping the app on your host, use port 5433 as shown in `.env.example`:
 
