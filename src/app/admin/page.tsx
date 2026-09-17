@@ -9,5 +9,5 @@ export default async function AdminPage() {
   if (!session) redirect("/login");
   if (!session.isAdmin) redirect("/dashboard");
   const [users, enabled] = await Promise.all([adminUsers(), signupEnabled()]);
-  return <div className="app-shell"><SiteHeader session={session} /><main className="community-content"><div className="community-hero compact-hero"><p className="eyebrow">Arcade Forge</p><h1>Admin portal</h1><p>Manage accounts and evaluate groups by course.</p></div><AdminPortal initialUsers={users} initialSignupEnabled={enabled} /></main></div>;
+  return <div className="app-shell"><SiteHeader session={session} /><main className="community-content"><div className="community-hero compact-hero"><p className="eyebrow">Arcade Forge</p><h1>User management</h1><p>Manage accounts, course assignments, and signup settings.</p></div><AdminPortal initialUsers={users} initialSignupEnabled={enabled} /></main></div>;
 }

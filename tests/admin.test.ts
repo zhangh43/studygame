@@ -14,6 +14,16 @@ test("admin input validates optional assignments and prevents editable star tota
   assert.equal(adminMutation.safeParse({ ...evaluation, courseNumber: " " }).success, false);
 });
 
+test("lesson validation requires one optional winner and 10–20 lessons", () => {
+  for (const count of [0, 9, 21, 10.5]) assert.equal(adminMutation.safeParse({ action: "lessons", courseNumber: "C1", count }).success, false);
+  for (const count of [10, 15, 20]) assert.equal(adminMutation.safeParse({ action: "lessons", courseNumber: "C1", count }).success, true);
+  const star = { action: "lessonStar", courseNumber: "C1", lessonId: "65fda5f0-997b-4e8d-bd99-7eb6c681e588", groupNumber: "A" };
+  assert.equal(adminMutation.safeParse(star).success, true);
+  assert.equal(adminMutation.safeParse({ ...star, groupNumber: null }).success, true);
+  assert.equal(adminMutation.safeParse({ ...star, groupNumber: ["A", "B"] }).success, false);
+  assert.equal(adminMutation.safeParse({ ...star, groupNumber: " " }).success, false);
+});
+
 // Opt in only against a freshly migrated disposable database and a server using it.
 const base = process.env.ADMIN_TEST_URL;
 test("admin HTTP flows and real PostgreSQL star aggregation", { skip: !base || !process.env.ADMIN_TEST_DATABASE_URL }, async () => {
@@ -69,6 +79,55 @@ test("admin HTTP flows and real PostgreSQL star aggregation", { skip: !base || !
     assert.equal((await request("/api/auth/login", { identifier: users[0].email, password: "initial123" })).status, 401);
     await login(users[0].email, "changed123");
     assert.equal((await pool.query("SELECT 1 FROM sessions WHERE user_id = $1", [users[0].id])).rowCount, 1);
+    // Independent lesson records, course isolation, and single-winner awards.
+    assert.equal((await request("/admin/evaluations", undefined, admin)).status, 200);
+    assert.equal((await request("/admin/evaluations", undefined, regular)).status, 307);
+    for (let i = 0; i < users.length; i++) {
+      assert.equal((await request("/api/admin", { action: "user", userId: users[i].id, courseNumber: i === 2 ? "L2" : "L1", groupNumber: i === 1 ? "B" : "A" }, admin)).status, 200);
+    }
+    for (const courseNumber of ["L1", "L2"]) {
+      assert.equal((await request("/api/admin", { action: "lessons", courseNumber, count: 10 }, admin)).status, 200);
+    }
+    async function fullSheet(course: string) { return (await request(`/api/admin?course=${course}`, undefined, admin)).json(); }
+    const initialLessons = (await fullSheet("L1")).lessons;
+    assert.equal(initialLessons.length, 10);
+    const first = initialLessons[0].id, second = initialLessons[1].id;
+    const lessonEvaluation = { action: "lessonEvaluation", courseNumber: "L1", lessonId: first, groupNumber: "A", completed: true, presented: false, notes: "Lesson one" };
+    assert.equal((await request("/api/admin", lessonEvaluation, admin)).status, 200);
+    assert.equal((await request("/api/admin", { ...lessonEvaluation, lessonId: second, completed: false, presented: true, notes: "Lesson two" }, admin)).status, 200);
+    assert.equal((await request("/api/admin", { ...lessonEvaluation, courseNumber: "L2" }, admin)).status, 404);
+    assert.equal((await request("/api/admin", { ...lessonEvaluation, groupNumber: "missing" }, admin)).status, 404);
+    const star = { action: "lessonStar", courseNumber: "L1", lessonId: first, groupNumber: "A" };
+    assert.equal((await request("/api/admin", star, regular)).status, 403);
+    assert.equal((await request("/api/admin", { ...star, courseNumber: "L2" }, admin)).status, 404);
+    assert.equal((await request("/api/admin", { ...star, groupNumber: "missing" }, admin)).status, 404);
+    assert.equal((await request("/api/admin", star, admin)).status, 200);
+    assert.equal((await request("/api/admin", { ...star, groupNumber: "B" }, admin)).status, 200);
+    let lessonSheet = await fullSheet("L1");
+    assert.equal(lessonSheet.lessons[0].starGroupNumber, "B");
+    assert.equal(lessonSheet.lessons[1].starGroupNumber, null);
+    assert.equal(lessonSheet.evaluations.length, 2);
+    assert.equal(lessonSheet.evaluations.filter((item: { completed: boolean }) => item.completed).length, 1);
+    assert.equal(lessonSheet.evaluations.filter((item: { presented: boolean }) => item.presented).length, 1);
+    assert.equal((await fullSheet("L2")).evaluations.length, 0);
+    // Concurrent award changes still leave exactly one winner.
+    const concurrent = await Promise.all([request("/api/admin", star, admin), request("/api/admin", { ...star, groupNumber: "B" }, admin)]);
+    assert.ok(concurrent.every(response => response.status === 200));
+    assert.ok(["A", "B"].includes((await fullSheet("L1")).lessons[0].starGroupNumber));
+    assert.equal((await request("/api/admin", { ...star, groupNumber: null }, admin)).status, 200);
+    assert.equal((await fullSheet("L1")).lessons[0].starGroupNumber, null);
+    assert.equal((await request("/api/admin", { action: "lessons", courseNumber: "L1", count: 20 }, admin)).status, 200);
+    assert.equal((await request("/api/admin", { action: "lessons", courseNumber: "L1", count: 10 }, admin)).status, 200);
+    lessonSheet = await fullSheet("L1");
+    assert.equal(lessonSheet.lessons.length, 20);
+    assert.equal(lessonSheet.lessons[0].id, first);
+    assert.equal(lessonSheet.evaluations.length, 2);
+    // Existing final evaluations and lesson history survive membership changes.
+    assert.equal((await fullSheet("C1")).groups[0].notes, "Presented in class");
+    assert.equal((await fullSheet("C1")).groups[0].members.length, 0);
+    assert.equal((await request("/api/admin", { action: "user", userId: users[0].id, courseNumber: "", groupNumber: "" }, admin)).status, 200);
+    assert.equal((await fullSheet("L1")).groups.find((group: { groupNumber: string }) => group.groupNumber === "A").members.length, 0);
+    assert.equal((await request("/api/admin", { ...lessonEvaluation, notes: "Retained history" }, admin)).status, 200);
     assert.equal((await request("/api/auth/resetpassword", { identifier: "admin", password: "hijacked123", credential: "whoisyourteacher" })).status, 400);
     const otherAdmin = await login("admin", "admin123");
     assert.equal((await request("/api/admin", { action: "password", currentPassword: "wrong", password: "newadmin123" }, admin)).status, 400);
