@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const passwordHash = await hashPassword(parsed.data.password);
     const updated = await transaction(async (client) => {
       const result = await client.query<{ id: string }>(
-        "UPDATE users SET password_hash = $1 WHERE email = $2 RETURNING id",
+        "UPDATE users SET password_hash = $1 WHERE email = $2 AND is_admin = false RETURNING id",
         [passwordHash, parsed.data.identifier],
       );
       if (!result.rows[0]) return false;

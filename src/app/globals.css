@@ -197,3 +197,21 @@ button:disabled { cursor: wait; opacity: .6; }
   .public-game-heading { align-items: flex-start; }
   .public-game-frame { min-height: 27rem; }
 }
+
+.admin-sections { display: grid; gap: 1.5rem; }
+.admin-panel { min-width: 0; border: 1px solid var(--line); border-radius: 1rem; padding: 1.5rem; background: var(--panel); }
+.admin-panel h2 { font-family: Georgia, serif; }
+.admin-table-scroll { overflow-x: auto; margin: 1rem 0; }
+.admin-table { border-collapse: collapse; width: 100%; text-align: left; font-size: .85rem; }
+.admin-table th, .admin-table td { padding: .8rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.admin-table caption { text-align: left; padding: .8rem; font-weight: 750; }
+.admin-user-form { display: grid; grid-template-columns: repeat(3, minmax(9rem, 1fr)) auto; gap: .6rem; }
+.admin-user-form input { width: 100%; }
+.admin-feedback { grid-column: 1 / -1; }
+.admin-evaluation-form { display: grid; gap: .65rem; min-width: 17rem; }
+.admin-evaluation-form label { display: flex; align-items: center; gap: .5rem; }
+.admin-evaluation-form input { min-height: auto; width: 1.1rem; height: 1.1rem; }
+.admin-evaluation-form textarea { padding: .7rem; resize: vertical; }
+.admin-course-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
+.admin-course-picker select { font: inherit; max-width: 100%; padding: .7rem; border: 1px solid var(--line); border-radius: .7rem; background: white; color: var(--ink); }
+.admin-password-form { max-width: 28rem; }

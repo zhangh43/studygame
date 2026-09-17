@@ -19,8 +19,11 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (parsed.data.identifier === "admin") return NextResponse.json({ error: "This username is reserved." }, { status: 409 });
     const passwordHash = await hashPassword(parsed.data.password);
     const account = await transaction(async (client) => {
+      const settings = await client.query("SELECT signup_enabled FROM site_settings WHERE id = true FOR SHARE");
+      if (!settings.rows[0]?.signup_enabled) return null;
       const user = await client.query<{ id: string }>(
         `INSERT INTO users(email, display_name, password_hash)
          VALUES ($1, $2, $3) RETURNING id`,
@@ -36,6 +39,7 @@ export async function POST(request: Request) {
       );
       return { userId: user.rows[0].id, tenantId: tenant.rows[0].id };
     });
+    if (!account) return NextResponse.json({ error: "New user signup is currently disabled." }, { status: 403 });
     await createSession(account.userId, account.tenantId);
     return NextResponse.json({ ok: true });
   } catch (error) {

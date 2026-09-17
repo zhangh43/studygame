@@ -13,6 +13,7 @@ export function SiteHeader({ session }: { session: Session | null }) {
       <nav className="main-nav" aria-label={t("nav.main")}>
         <Link href="/discover">{t("nav.discover")}</Link>
         <Link href="/leaderboards">{t("nav.leaderboards")}</Link>
+        {session?.isAdmin && <Link href="/admin">Admin</Link>}
         {session && <Link href="/dashboard">{t("nav.workshop")}</Link>}
       </nav>
       <div className="topbar-user">

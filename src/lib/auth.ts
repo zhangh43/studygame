@@ -20,6 +20,7 @@ export type Session = {
   email: string;
   displayName: string;
   tenantName: string;
+  isAdmin: boolean;
 };
 
 function tokenHash(token: string): string {
@@ -72,7 +73,7 @@ export async function getSession(): Promise<Session | null> {
   if (!token) return null;
   return queryOne<Session>(
     `SELECT s.id AS "sessionId", u.id AS "userId", t.id AS "tenantId",
-            u.email, u.display_name AS "displayName", t.name AS "tenantName"
+            u.is_admin AS "isAdmin", u.email, u.display_name AS "displayName", t.name AS "tenantName"
        FROM sessions s
        JOIN users u ON u.id = s.user_id
        JOIN tenants t ON t.id = s.tenant_id

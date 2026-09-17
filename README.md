@@ -155,3 +155,13 @@ The web application strictly scopes database queries and workspace paths by the 
 The supplied single-container deployment is appropriate for development and a controlled private beta. Although Codex uses its own filesystem sandbox, all game workspaces are mounted into the same application container. Before accepting mutually untrusted public tenants, run every harness job in a disposable container or microVM that mounts only that game’s workspace and contains no application/database secrets. Keep the existing `GameHarness` interface and move its implementation behind a queue/worker boundary.
 
 See [DEPLOY_AZURE.md](./DEPLOY_AZURE.md) for the VM deployment procedure and production checklist.
+
+### Admin portal
+
+Run `npm run db:migrate` before starting the updated app. Migration `003_admin.sql` adds optional course/group strings, signup settings, group evaluations, and the initial administrator. Sign in at `/login` with username `admin` and password `admin123`; administrators are sent to `/admin`. Change the initial password in the portal. Subsequent migrations do not reset it. If an account named `admin` already exists, the migration fails safely rather than promoting that account; rename the existing account before retrying.
+
+The portal lists registered users and lets administrators set or clear course/group numbers, reset user passwords, and enable or disable signup. Disabling signup is enforced by the registration API; existing users can still log in. Password resets revoke that user's sessions. Admin password changes require the current password and revoke other admin sessions. The public reset endpoint cannot reset an administrator.
+
+Choose a course to view its group evaluation sheet. Completion, presentation, and notes are recorded per course/group. Star totals are read-only counts of actual stars on all games created by the group's current members, including members with multiple games. Refresh the sheet for current counts. Users in a course without a group are listed for assignment. Moving users changes membership and star totals; evaluations stay with the original course/group and reappear if members are assigned there again.
+
+Admin validation runs with `npm test`. The HTTP/database integration test is opt-in: start the app against a freshly migrated disposable PostgreSQL database, then run `ADMIN_TEST_URL=http://127.0.0.1:3109 ADMIN_TEST_DATABASE_URL=postgres://… npm test`. It creates test users/games and changes settings/passwords in that database, so do not point it at a shared or production database.
