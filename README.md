@@ -162,6 +162,8 @@ Run `npm run db:migrate` before starting the updated app. Migration `003_admin.s
 
 The portal lists registered users and lets administrators set or clear course/group numbers, reset user passwords, and enable or disable signup. Disabling signup is enforced by the registration API; existing users can still log in. Password resets revoke that user's sessions. Admin password changes require the current password and revoke other admin sessions. The public reset endpoint cannot reset an administrator.
 
+The EN/中文 switch also covers user management and course evaluations, including form labels, lesson-star controls, summaries, and success/error feedback. To reset a user's password, enter a new password (6–200 characters) in that user's row and select **Save user**. A blank password field leaves the existing password unchanged. After a successful reset, the user must sign in again with the new password.
+
 User management is at `/admin`; the separate **Course evaluations** navigation tab opens `/admin/evaluations`. Run `npm run db:migrate` to apply `004_lessons.sql`. Existing course evaluations are preserved as final evaluations.
 
 Choose a course and create 10–20 numbered lessons. Each lesson has independent group completion, presentation, and notes. Courses can be expanded up to 20 lessons without deleting records. One optional **Lesson star** winner can be selected per lesson; choosing another group replaces the winner, and “No winner” clears it. The database stores a single winner per lesson, including during concurrent updates.

@@ -40,7 +40,13 @@ test("admin HTTP flows and real PostgreSQL star aggregation", { skip: !base || !
   try {
     assert.equal((await request("/api/admin?course=C1")).status, 403);
     const admin = await login("admin", "admin123");
-    assert.equal((await request("/admin", undefined, admin)).status, 200);
+    for (const [locale, usersTitle, evaluationsTitle] of [["en", "User management", "Course evaluations"], ["zh", "用户管理", "课程评价"]]) {
+      for (const [path, title] of [["/admin", usersTitle], ["/admin/evaluations", evaluationsTitle]]) {
+        const page = await request(path, undefined, `${admin}; locale=${locale}`);
+        assert.equal(page.status, 200);
+        assert.ok((await page.text()).includes(`<h1>${title}</h1>`));
+      }
+    }
     const suffix = Date.now().toString();
     const names = ["alice", "bob", "carol"].map(name => `${name}-${suffix}`);
     for (const identifier of names) assert.equal((await request("/api/auth/register", { name: identifier, identifier, password: "initial123" })).status, 200);
@@ -74,10 +80,35 @@ test("admin HTTP flows and real PostgreSQL star aggregation", { skip: !base || !
     assert.equal((await sheet("C2"))[0].completed, false);
     await pool.query("DELETE FROM game_stars WHERE game_id = $1 AND user_id = $2", [games[0], users[1].id]);
     assert.equal((await sheet("C1"))[0].stars, 3);
-    assert.equal((await request("/api/admin", { action: "user", userId: users[0].id, courseNumber: "C1", groupNumber: "", password: "changed123" }, admin)).status, 200);
+    const secondSession = await login(users[0].email, "initial123");
+    const otherUserSession = await login(users[1].email, "initial123");
+    const changeUser = { action: "user", userId: users[0].id, courseNumber: "C1", groupNumber: "01" };
+    const originalHash = (await pool.query("SELECT password_hash FROM users WHERE id = $1", [users[0].id])).rows[0].password_hash;
+    const sessionCount = (await pool.query("SELECT 1 FROM sessions WHERE user_id = $1", [users[0].id])).rowCount;
+    for (const password of ["", "short", "a".repeat(201)]) {
+      assert.equal((await request("/api/admin", { ...changeUser, password }, admin)).status, 400);
+    }
+    for (const cookie of ["", regular]) {
+      assert.equal((await request("/api/admin", { ...changeUser, password: "changed123" }, cookie)).status, 403);
+    }
+    assert.equal((await request("/api/admin", { ...changeUser, password: "changed123" }, admin, "https://evil.example")).status, 403);
+    const adminId = (await pool.query("SELECT id FROM users WHERE email = 'admin'")).rows[0].id;
+    for (const userId of [adminId, "00000000-0000-4000-8000-000000000000"]) {
+      assert.equal((await request("/api/admin", { ...changeUser, userId, password: "changed123" }, admin)).status, 404);
+    }
+    // An omitted password preserves the password and every existing session.
+    assert.equal((await request("/api/admin", changeUser, admin)).status, 200);
+    assert.equal((await pool.query("SELECT password_hash FROM users WHERE id = $1", [users[0].id])).rows[0].password_hash, originalHash);
+    assert.equal((await pool.query("SELECT 1 FROM sessions WHERE user_id = $1", [users[0].id])).rowCount, sessionCount);
+    assert.equal((await request("/api/games", undefined, regular)).status, 200);
+    assert.equal((await request("/api/admin", { ...changeUser, groupNumber: "", password: "changed123" }, admin)).status, 200);
+    assert.equal((await pool.query("SELECT 1 FROM sessions WHERE user_id = $1", [users[0].id])).rowCount, 0);
+    for (const cookie of [regular, secondSession]) assert.equal((await request("/api/games", undefined, cookie)).status, 401);
+    assert.equal((await request("/api/games", undefined, otherUserSession)).status, 200);
     assert.equal((await sheet("C1"))[0].stars, 1);
     assert.equal((await request("/api/auth/login", { identifier: users[0].email, password: "initial123" })).status, 401);
-    await login(users[0].email, "changed123");
+    const changedSession = await login(users[0].email, "changed123");
+    assert.equal((await request("/api/games", undefined, changedSession)).status, 200);
     assert.equal((await pool.query("SELECT 1 FROM sessions WHERE user_id = $1", [users[0].id])).rowCount, 1);
     // Independent lesson records, course isolation, and single-winner awards.
     assert.equal((await request("/admin/evaluations", undefined, admin)).status, 200);

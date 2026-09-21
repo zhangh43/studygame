@@ -15,7 +15,7 @@ export function SiteHeader({ session }: { session: Session | null }) {
       <nav className="main-nav" aria-label={t("nav.main")}>
         <Link href="/discover">{t("nav.discover")}</Link>
         <Link href="/leaderboards">{t("nav.leaderboards")}</Link>
-        {session?.isAdmin && <><Link href="/admin" aria-current={pathname === "/admin" ? "page" : undefined}>User management</Link><Link href="/admin/evaluations" aria-current={pathname.startsWith("/admin/evaluations") ? "page" : undefined}>Course evaluations</Link></>}
+        {session?.isAdmin && <><Link href="/admin" aria-current={pathname === "/admin" ? "page" : undefined}>{t("admin.users")}</Link><Link href="/admin/evaluations" aria-current={pathname.startsWith("/admin/evaluations") ? "page" : undefined}>{t("admin.evaluations")}</Link></>}
         {session && <Link href="/dashboard">{t("nav.workshop")}</Link>}
       </nav>
       <div className="topbar-user">
