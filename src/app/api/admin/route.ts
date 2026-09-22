@@ -55,10 +55,21 @@ export async function POST(request: Request) {
         ON CONFLICT (course_number, group_number) DO UPDATE SET completed = EXCLUDED.completed, presented = EXCLUDED.presented, notes = EXCLUDED.notes, updated_at = now() RETURNING group_number`,
       [data.courseNumber, data.groupNumber, data.completed, data.presented, data.notes]);
       if (!result.rowCount) return NextResponse.json({ error: "Group no longer exists in this course. Refresh the sheet." }, { status: 404 });
+    } else if (data.action === "deleteUser") {
+      const deleted = await transaction(async client => {
+        // Lock the account so concurrent writes cannot leave newly created games behind.
+        const account = await client.query("SELECT id FROM users WHERE id = $1 AND NOT is_admin FOR UPDATE", [data.userId]);
+        if (!account.rowCount) return false;
+        await client.query("DELETE FROM games WHERE creator_user_id = $1", [data.userId]);
+        await client.query("DELETE FROM users WHERE id = $1 AND NOT is_admin", [data.userId]);
+        return true;
+      });
+      if (!deleted) return NextResponse.json({ error: "User not found or account is an administrator." }, { status: 404 });
     } else if (data.action === "user") {
+      if (data.identifier === "admin") return NextResponse.json({ error: "This username is reserved." }, { status: 409 });
       const passwordHash = data.password ? await hashPassword(data.password) : null;
       const updated = await transaction(async client => {
-        const result = await client.query(`UPDATE users SET group_number = $2, course_number = $3, password_hash = coalesce($4, password_hash) WHERE id = $1 AND NOT is_admin RETURNING id`, [data.userId, data.groupNumber, data.courseNumber, passwordHash]);
+        const result = await client.query(`UPDATE users SET group_number = $2, course_number = $3, password_hash = coalesce($4, password_hash), display_name = coalesce($5, display_name), email = coalesce($6, email) WHERE id = $1 AND NOT is_admin RETURNING id`, [data.userId, data.groupNumber, data.courseNumber, passwordHash, data.displayName ?? null, data.identifier ?? null]);
         if (result.rowCount && passwordHash) await client.query("DELETE FROM sessions WHERE user_id = $1", [data.userId]);
         return result.rowCount;
       });
@@ -74,7 +85,8 @@ export async function POST(request: Request) {
       if (!updated) return NextResponse.json({ error: "Current password is incorrect." }, { status: 400 });
     }
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505") return NextResponse.json({ error: "An account with that email/user name already exists." }, { status: 409 });
     return NextResponse.json({ error: "Could not save changes. Please try again." }, { status: 500 });
   }
 }

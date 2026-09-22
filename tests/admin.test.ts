@@ -24,6 +24,19 @@ test("lesson validation requires one optional winner and 10–20 lessons", () =>
   assert.equal(adminMutation.safeParse({ ...star, groupNumber: " " }).success, false);
 });
 
+test("user edits validate names and normalize login identifiers", () => {
+  const user = { action: "user", userId: "65fda5f0-997b-4e8d-bd99-7eb6c681e588", courseNumber: "", groupNumber: "", displayName: " New Name ", identifier: " USER@Example.COM " };
+  const parsed = adminMutation.parse(user);
+  assert.ok(parsed.action === "user");
+  assert.equal(parsed.displayName, "New Name");
+  assert.equal(parsed.identifier, "user@example.com");
+  for (const update of [{ displayName: " " }, { displayName: "x" }, { displayName: "x".repeat(81) }, { identifier: " " }, { identifier: "x".repeat(255) }]) {
+    assert.equal(adminMutation.safeParse({ ...user, ...update }).success, false);
+  }
+  assert.equal(adminMutation.safeParse({ action: "deleteUser", userId: user.userId }).success, true);
+  assert.equal(adminMutation.safeParse({ action: "deleteUser", userId: "invalid" }).success, false);
+});
+
 // Opt in only against a freshly migrated disposable database and a server using it.
 const base = process.env.ADMIN_TEST_URL;
 test("admin HTTP flows and real PostgreSQL star aggregation", { skip: !base || !process.env.ADMIN_TEST_DATABASE_URL }, async () => {
@@ -167,5 +180,43 @@ test("admin HTTP flows and real PostgreSQL star aggregation", { skip: !base || !
     assert.equal((await request("/api/auth/login", { identifier: "admin", password: "admin123" })).status, 401);
     const updatedAdmin = await login("admin", "newadmin123");
     assert.equal((await request("/api/admin", { action: "password", currentPassword: "newadmin123", password: "admin123" }, updatedAdmin)).status, 200);
+    const target = users[2];
+    const renamed = `renamed-${suffix}@example.com`;
+    const edit = { action: "user", userId: target.id, courseNumber: "L2", groupNumber: "A", displayName: "Updated Display Name", identifier: ` ${renamed.toUpperCase()} ` };
+    const actor = updatedAdmin;
+    const regularActive = await login(users[1].email, "initial123");
+    assert.equal((await request("/api/admin", edit, regularActive)).status, 403);
+    assert.equal((await request("/api/admin", edit, actor)).status, 200);
+    const renamedRow = (await pool.query("SELECT email, display_name FROM users WHERE id = $1", [target.id])).rows[0];
+    assert.equal(renamedRow.email, renamed);
+    assert.equal(renamedRow.display_name, edit.displayName);
+    assert.equal((await request("/api/auth/login", { identifier: target.email, password: "initial123" })).status, 401);
+    const renamedSession = await login(renamed, "initial123");
+    assert.equal((await request("/api/admin", { ...edit, identifier: users[1].email.toUpperCase(), displayName: "Should roll back" }, actor)).status, 409);
+    assert.equal((await pool.query("SELECT display_name FROM users WHERE id = $1", [target.id])).rows[0].display_name, edit.displayName);
+    assert.equal((await request("/api/admin", { ...edit, identifier: " ADMIN " }, actor)).status, 409);
+    assert.equal((await request("/api/admin", { ...edit, userId: adminId }, actor)).status, 404);
+    assert.equal((await request("/api/admin", { action: "deleteUser", userId: adminId }, actor)).status, 404);
+    const ownGame = games[3];
+    await pool.query("INSERT INTO game_comments(game_id, user_id, body) VALUES ($1, $2, 'Comment')", [games[0], target.id]);
+    await pool.query("INSERT INTO game_stars(game_id, user_id) VALUES ($1, $2)", [games[0], target.id]);
+    await pool.query("INSERT INTO messages(tenant_id, game_id, role, content) SELECT tenant_id, id, 'user', 'test' FROM games WHERE id = $1", [ownGame]);
+    await pool.query("INSERT INTO generation_jobs(tenant_id, game_id, status) SELECT tenant_id, id, 'succeeded' FROM games WHERE id = $1", [ownGame]);
+    const beforeDelete = await fullSheet("L1");
+    const remove = { action: "deleteUser", userId: target.id };
+    assert.equal((await request("/api/admin", remove)).status, 403);
+    assert.equal((await request("/api/admin", remove, regularActive)).status, 403);
+    assert.equal((await request("/api/admin", remove, actor, "https://evil.example")).status, 403);
+    assert.equal((await request("/api/admin", remove, actor)).status, 200);
+    for (const table of ["users", "games", "sessions", "tenant_memberships", "game_comments", "game_stars"]) {
+      const column = table === "users" ? "id" : table === "games" ? "creator_user_id" : "user_id";
+      assert.equal((await pool.query(`SELECT 1 FROM ${table} WHERE ${column} = $1`, [target.id])).rowCount, 0, table);
+    }
+    for (const table of ["messages", "generation_jobs", "game_stars"]) assert.equal((await pool.query(`SELECT 1 FROM ${table} WHERE game_id = $1`, [ownGame])).rowCount, 0);
+    assert.equal((await request("/api/auth/login", { identifier: renamed, password: "initial123" })).status, 401);
+    assert.equal((await request("/dashboard", undefined, renamedSession)).status, 307);
+    assert.equal((await request("/api/admin", remove, actor)).status, 404);
+    assert.equal((await pool.query("SELECT 1 FROM games WHERE id = $1", [games[0]])).rowCount, 1);
+    assert.deepEqual((await fullSheet("L1")).evaluations, beforeDelete.evaluations);
   } finally { await pool.end(); }
 });

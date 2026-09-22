@@ -9,7 +9,8 @@ export const adminMutation = z.discriminatedUnion("action", [
   z.object({ action: z.literal("lessonEvaluation"), courseNumber, lessonId: z.uuid(), groupNumber, completed: z.boolean(), presented: z.boolean(), notes: z.string().max(4000) }).strict(),
   z.object({ action: z.literal("lessonStar"), courseNumber, lessonId: z.uuid(), groupNumber: groupNumber.nullable() }).strict(),
   z.object({ action: z.literal("signup"), enabled: z.boolean() }).strict(),
-  z.object({ action: z.literal("user"), userId: z.uuid(), groupNumber: optionalNumber, courseNumber: optionalNumber, password: z.string().min(6).max(200).optional() }).strict(),
+  z.object({ action: z.literal("user"), userId: z.uuid(), groupNumber: optionalNumber, courseNumber: optionalNumber, password: z.string().min(6).max(200).optional(), displayName: z.string().trim().min(2).max(80).optional(), identifier: z.string().trim().toLowerCase().min(1).max(254).optional() }).strict(),
+  z.object({ action: z.literal("deleteUser"), userId: z.uuid() }).strict(),
   z.object({ action: z.literal("password"), currentPassword: z.string().min(1).max(200), password: z.string().min(6).max(200) }).strict(),
   z.object({ action: z.literal("evaluation"), courseNumber: z.string().trim().min(1).max(100), groupNumber: z.string().trim().min(1).max(100), completed: z.boolean(), presented: z.boolean(), notes: z.string().max(4000) }).strict(),
 ]);
